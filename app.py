@@ -21,21 +21,30 @@ paths = [ROOT / "models" / name for name in ("rf_model.joblib", "model_metadata.
 signature = tuple(file_signature(path) for path in paths)
 st.session_state.model, st.session_state.model_detail = current_model(signature)
 
-page = st.navigation([
-    st.Page("pages/dashboard.py", title="대시보드", icon=":material/dashboard:", default=True),
-    st.Page("pages/mat_playback.py", title="MAT 순차 재생·알림", icon=":material/play_circle:"),
-    st.Page("pages/live_monitor.py", title="실시간 진동·알림", icon=":material/notifications_active:"),
+# 실시간 진동 번들 화면은 해당 파일이 있을 때만 메뉴에 넣는다.
+optional = [
+    ("pages/mat_playback.py", "MAT 순차 재생·알림", ":material/play_circle:"),
+    ("pages/live_monitor.py", "실시간 진동·알림", ":material/notifications_active:"),
+]
+pages = [st.Page("pages/dashboard.py", title="대시보드", icon=":material/dashboard:", default=True)]
+pages += [st.Page(path, title=title, icon=icon) for path, title, icon in optional if (ROOT / path).is_file()]
+pages += [
     st.Page("pages/manual_diagnosis.py", title="수동 진단", icon=":material/sensors:"),
     st.Page("pages/csv_analysis.py", title="CSV 분석 및 신호", icon=":material/monitoring:"),
+    st.Page("pages/verification.py", title="판정 검증", icon=":material/fact_check:"),
     st.Page("pages/capstone_ocsvm.py", title="캡스톤 OCSVM", icon=":material/analytics:"),
     st.Page("pages/history.py", title="진단 기록", icon=":material/history:"),
-])
+]
+page = st.navigation(pages)
+
 st.sidebar.divider()
 st.sidebar.markdown("**PIPEGUARD AI**")
-if st.session_state.model is None:
-    st.sidebar.caption("기존 수동·CSV 진단용 단일 RF 미연결 · 진동 번들은 ‘실시간 진동·알림’에서 사용")
+st.sidebar.caption("지하배관 진동 특징값 판정과 검증")
+model = st.session_state.model
+if model is None:
+    st.sidebar.caption("● 모델 미연결 · 수동·CSV 진단과 판정 검증에는 models/rf_model.joblib이 필요합니다")
 else:
-    model = st.session_state.model
-    st.sidebar.success(f"{model.name} · {model.version}")
-st.title("PIPEGUARD AI — 지하배관 지능형 이상 진단 시스템")
+    st.sidebar.caption(f"● {model.name} · {model.version}")
+    if model.synthetic:
+        st.sidebar.caption("합성 데모 모델 · 실제 판정에 쓰지 마세요")
 page.run()

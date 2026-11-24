@@ -1,8 +1,12 @@
-# PIPEGUARD AI — 지하배관 지능형 이상 진단 시스템
+# PIPEGUARD AI
+
+지하배관 진동 특징값으로 정상·이상을 판정하고, 정답 라벨로 그 판정이 맞는지 웹에서 확인하는 Streamlit 앱입니다.
 
 **실시간 진동·알림 배포 시작:** 첨부 진동 모델, 센서 API, n8n 이메일 연결은 [START_HERE.md](START_HERE.md)를 먼저 확인하세요. 아래는 기존 기능 안내입니다.
 
-CSV 특징값 또는 수동 주파수 → 학습 입력 검증 → 전처리 → 모델 판정 → SQLite 저장 → 대시보드 및 CSV 내보내기
+CSV 특징값 또는 수동 주파수 → 학습 입력 검증 → 학습 범위 점검 → 모델 판정 → SQLite 저장 → 대시보드 및 CSV 내보내기
+
+정답 라벨이 있는 CSV → 판정 검증(재현율·오경보율·정밀도, 임계값, 틀린 행) → 결과 CSV (기록에 저장하지 않음)
 
 원시 시계열 CSV → 센서 열 및 샘플링 주파수 선택 → 시간 파형 및 FFT
 
@@ -11,15 +15,19 @@ CSV 특징값 또는 수동 주파수 → 학습 입력 검증 → 전처리 →
 | `app.py` | 공통 화면, 사이드바 탐색, 모델 연결 상태 |
 | `pages/dashboard.py` | 진단 건수, 최근 기록, 센서 그래프 |
 | `pages/manual_diagnosis.py` | 단일 주파수 모델 진단 |
-| `pages/csv_analysis.py` | 특징값 진단, 결과 다운로드, 원시 신호 시각화 |
+| `pages/csv_analysis.py` | 특징값 진단, 확인할 행 표시, 결과 다운로드, 원시 신호 시각화 |
+| `pages/verification.py` | 정답 라벨과 판정 비교, 임계값 조정, 틀린 행과 특징별 위치 |
 | `pages/history.py` | SQLite 기록 조회, 필터, 다운로드 |
 | `utils/model_loader.py` | 입력 계약 검사, RF·OCSVM 모델 추론 |
 | `utils/preprocessing.py` | CSV 파싱 및 수치 검증 |
+| `utils/evaluation.py` | 검증 지표, 정밀도·재현율 곡선, 학습 범위·단위 점검, 학습 행 겹침 확인 |
 | `utils/visualization.py` | Plotly 그래프, SciPy FFT |
 | `utils/database.py` | SQLite 생성과 저장 및 조회 |
-| `training/train_model.py` | RF 학습, 테스트 평가 및 모델 저장 |
+| `training/train_model.py` | RF 학습, 테스트 평가, 학습 범위·테스트 행 저장 |
+| `training/make_demo.py` | 화면 확인용 합성 데모 데이터와 데모 모델 생성 |
+| `tests/` | 검증 계산 단위 테스트 |
 | `requirements.txt` | Python 의존성 |
-| `.streamlit/config.toml` | 다크 테마와 로컬 서버 설정 |
+| `.streamlit/config.toml` | 밝은 계측 기록지 테마와 로컬 서버 설정 |
 | `models/` · `data/` | 학습 모델과 메타데이터 · 로컬 DB |
 
 ## Windows PowerShell에서 실행
@@ -34,7 +42,37 @@ py -3.13 -m streamlit run app.py
 
 브라우저에서 [http://localhost:8501](http://localhost:8501)을 엽니다. 종료하려면 PowerShell에서 Ctrl+C를 누릅니다. 8501이 사용 중이면 `--server.port 8502`를 실행 명령 뒤에 붙이고 브라우저에서 8502로 접속합니다.
 
-최초 실행 시 대시보드에 **AI 모델 미연결**이 표시됩니다. 원시 신호 시각화는 모델과 독립적으로 사용할 수 있습니다.
+최초 실행 시 대시보드에 **모델 미연결**이 표시됩니다. 원시 신호 시각화는 모델과 독립적으로 사용할 수 있습니다.
+
+## 합성 데모로 화면 먼저 확인
+
+실제 모델이 없어도 판정 검증과 그래프가 어떻게 보이는지 확인할 수 있습니다. 아래 명령은 가짜 특징값으로 데모 RF를 학습해 `models/`에 넣고, 확인용 CSV를 `data/demo/`에 만듭니다. `models/`에 이미 모델이 있으면 멈추며, 덮어쓰려면 `--force`를 붙입니다.
+
+```powershell
+py -3.13 -m training.make_demo
+py -3.13 -m streamlit run app.py
+```
+
+- `data/demo/synthetic_check_labeled.csv`: 정답 라벨이 있는 확인용 CSV. 학습 범위 밖 행 4개를 일부러 넣었습니다.
+- `data/demo/synthetic_check_unit_error.csv`: log10 대신 원래 값을 넣은 CSV. 단위 확인 경고가 뜨는지 볼 때 씁니다.
+
+데모 모델이 연결되면 모든 화면 위에 ‘합성 데모 모델’ 경고가 붙고, 진단 기록 출처에도 ‘합성 데모’가 남습니다. 데모 수치는 실제 배관 성능이 아닙니다. 실제 모델을 쓰기 전에 `models/`의 데모 파일을 지우세요.
+
+## 판정 검증
+
+사이드바 **판정 검증**에서 특징값 열과 정답 라벨 열이 있는 CSV를 올립니다. 결과는 진단 기록에 저장하지 않습니다.
+
+1. **정답 라벨 지정** · 라벨 열과 정상·이상을 뜻하는 값을 고릅니다. `정상/이상`, `normal/anomaly`, `0/1`은 자동으로 맞춰지고 공백·대소문자 차이는 무시합니다. 지정하지 않은 값이 있으면 멈춥니다.
+2. **입력 점검** · 학습 최소·최대를 벗어난 행, 학습 중앙값과 크게 다른 특징(log10 변환 누락, Hz·kHz 착오 의심), 값이 변하지 않는 열, 중복 행을 보여줍니다. 학습에 쓴 행과 특징값이 같은 행은 기본으로 빼고 계산합니다.
+3. **판정 결과** · 임계값 슬라이더로 기준을 옮기며 재현율(놓치지 않음), 오경보율, 정밀도, MCC를 건수와 함께 봅니다. 정답별 점수 분포에서 두 무리가 갈라지는지, 정밀도·재현율 곡선에서 현재 위치가 어디인지 확인합니다.
+4. **틀린 행** · 놓친 이상과 잘못 경보를 행 번호, 점수, 확인할 점(임계값 근처·학습 범위 밖)과 함께 보여줍니다. 전체 결과는 CSV로 받을 수 있습니다.
+5. **특징별 확인** · 특징 하나를 골라 맞춘 행과 틀린 행이 학습 범위 띠의 어디에 있는지 봅니다.
+
+읽을 때 주의할 점
+- RF의 이상 확률은 나무들의 투표 비율이며 실제 고장 확률로 보정한 값이 아닙니다. 판정은 ‘확률 ≥ 임계값이면 이상’입니다.
+- OCSVM처럼 확률이 없는 모델은 결정 점수의 부호를 뒤집어 ‘클수록 이상’으로 맞추고 기본 임계값 0을 씁니다. 결정 점수는 `decision_score_label`을 설정했을 때만 계산됩니다.
+- 정답에 한쪽 라벨만 있으면 계산할 수 없는 지표는 0이 아니라 ‘—’로 표시합니다. 전체 30행 미만이거나 한쪽 라벨이 5행 미만이면 표본 부족 경고가 뜹니다.
+- 학습에 쓰지 않은 독립 측정 데이터로 검증해야 실제 성능에 가깝습니다. `train_model.py`로 학습하면 떼어 둔 테스트 행이 `models/holdout_labeled.csv`로 저장되므로, 이 파일을 올리면 PowerShell에 나온 테스트 결과를 웹에서 다시 볼 수 있습니다.
 
 ## 실제 라벨 데이터로 RF 학습
 
@@ -54,7 +92,7 @@ capture_B.mat,41.7,0.19,이상
 py -3.13 -m training.train_model data\labeled_features.csv --label label --group source_file --features frequency_khz rms --units kHz V
 ```
 
-실제 라벨이 `0`과 `1`이면 `--normal 0 --anomaly 1`을 추가합니다. 평가 지표와 혼동행렬은 PowerShell에 출력됩니다. 모델과 메타데이터는 기본적으로 `models/`에 저장됩니다. 아래 명령은 주파수 한 개로 새 RF를 학습하고 수동 메뉴를 활성화하는 예시입니다.
+실제 라벨이 `0`과 `1`이면 `--normal 0 --anomaly 1`을 추가합니다. 평가 지표와 혼동행렬은 PowerShell에 출력되고, 메타데이터에는 특징별 학습 범위(`feature_ranges`), 테스트 결과(`test_metrics`), 학습 행 지문(`train_row_hashes`)이 함께 저장됩니다. 이전에 학습한 모델은 이 정보가 없어도 동작하며, 범위 점검과 학습 행 겹침 확인만 생략됩니다. 모델과 메타데이터는 기본적으로 `models/`에 저장됩니다. 아래 명령은 주파수 한 개로 새 RF를 학습하고 수동 메뉴를 활성화하는 예시입니다.
 
 ```powershell
 py -3.13 -m training.train_model data\labeled_features.csv --label label --group source_file --features frequency_khz --units kHz --manual-frequency
@@ -90,7 +128,7 @@ py -3.13 -m training.train_model data\labeled_features.csv --label label --group
 
 ## 분석과 기록
 
-1. **특징값 CSV 진단**에서 CSV를 올리면 미리보기와 결측치 요약이 표시됩니다. 모델이 연결되어 있으면 자동으로 검증하고 분석하며, 입력 특징값과 결과가 SQLite에 저장됩니다.
+1. **특징값 CSV 진단**에서 CSV를 올리면 미리보기와 빈 칸 수가 표시됩니다. 모델이 연결되어 있으면 자동으로 분석하고 입력 특징값과 결과를 SQLite에 저장합니다. 결과 표 앞쪽에 판정과 ‘확인할 점’(학습 범위 밖 특징, 이상 확률 0.4~0.6)이 붙고, ‘확인할 행만 보기’로 걸러 볼 수 있습니다.
 2. **원시 시계열 시각화**에서 등간격 원시 샘플 CSV를 올리고 센서 열과 실제 샘플링 주파수(Hz)를 입력합니다. 4~250,000개 샘플을 지원합니다. 시간 파형은 화면 표시용으로 일부 점을 샘플링하고 FFT는 선택 구간 전체를 계산합니다.
 3. **진단 기록**에서 판정별 조회와 CSV 다운로드를 할 수 있습니다. 기록은 `data/diagnoses.sqlite3`에 저장됩니다. Excel 한글 표시를 위해 CSV는 UTF-8 BOM으로 저장됩니다.
 

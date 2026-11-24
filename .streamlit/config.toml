@@ -1,0 +1,27 @@
+# 계측 기록지 같은 밝은 회색 화면. 이상 판정만 적주황, 학습 범위 밖은 황토색.
+[theme]
+base = "light"
+primaryColor = "#2d3e50"
+backgroundColor = "#f5f6f7"
+secondaryBackgroundColor = "#eaecef"
+textColor = "#1c2127"
+linkColor = "#2d3e50"
+borderColor = "#d0d7de"
+showWidgetBorder = true
+showSidebarBorder = true
+baseRadius = "6px"
+font = "'IBM Plex Sans KR':https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap"
+codeFont = "'IBM Plex Mono':https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap"
+headingFontWeights = [600, 500, 500, 500, 500, 500]
+chartCategoricalColors = ["#8c959f", "#c63d2f", "#b87a1e", "#3b627e", "#57606a", "#adb5bd"]
+
+[theme.sidebar]
+backgroundColor = "#eceef1"
+secondaryBackgroundColor = "#e2e5e9"
+
+[server]
+address = "localhost"
+maxUploadSize = 25
+
+[browser]
+gatherUsageStats = false

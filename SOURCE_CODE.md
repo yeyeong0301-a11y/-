@@ -1,4 +1,6 @@
-# PIPEGUARD AI 파일별 전체 코드
+# PIPEGUARD AI 파일별 전체 코드 (이전 스냅숏)
+
+> 이 문서는 이전 버전 코드를 글로 옮긴 기록입니다. 지금 실행되는 코드는 저장소의 `pages/`, `utils/`, `training/`, `tests/` 폴더와 `.streamlit/config.toml`에 있습니다. 내용이 다르면 폴더의 파일을 기준으로 하세요.
 
 ## app.py
 
